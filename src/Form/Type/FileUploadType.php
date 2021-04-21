@@ -2,23 +2,25 @@
 
 namespace EasyCorp\Bundle\EasyAdminBundle\Form\Type;
 
-use EasyCorp\Bundle\EasyAdminBundle\Form\DataTransformer\StringToFileTransformer;
-use EasyCorp\Bundle\EasyAdminBundle\Form\Type\Model\FileUploadState;
-use Symfony\Component\Form\AbstractType;
-use Symfony\Component\Form\DataMapperInterface;
-use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
-use Symfony\Component\Form\Extension\Core\Type\FileType;
-use Symfony\Component\Form\FormBuilderInterface;
-use Symfony\Component\Form\FormInterface;
-use Symfony\Component\Form\FormView;
-use Symfony\Component\HttpFoundation\File\File;
-use Symfony\Component\HttpFoundation\File\UploadedFile;
-use Symfony\Component\OptionsResolver\Exception\InvalidArgumentException;
-use Symfony\Component\OptionsResolver\Options;
-use Symfony\Component\OptionsResolver\OptionsResolver;
-use Symfony\Component\String\Slugger\AsciiSlugger;
 use Symfony\Component\Uid\Ulid;
 use Symfony\Component\Uid\Uuid;
+use Symfony\Component\Form\FormView;
+use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\FormInterface;
+use Symfony\Component\OptionsResolver\Options;
+use Symfony\Component\Form\DataMapperInterface;
+use Symfony\Component\HttpFoundation\File\File;
+use Symfony\Component\Form\FormBuilderInterface;
+use Symfony\Component\String\Slugger\AsciiSlugger;
+use Symfony\Component\Validator\Constraints\Image as ImageConstraint;
+use Symfony\Component\OptionsResolver\OptionsResolver;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
+use Symfony\Component\Form\Extension\Core\Type\FileType;
+use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
+use Symfony\Component\Validator\Constraints\File as FileConstraint;
+use EasyCorp\Bundle\EasyAdminBundle\Form\Type\Model\FileUploadState;
+use Symfony\Component\OptionsResolver\Exception\InvalidArgumentException;
+use EasyCorp\Bundle\EasyAdminBundle\Form\DataTransformer\StringToFileTransformer;
 
 /**
  * @author Yonel Ceruto <yonelceruto@gmail.com>
@@ -41,9 +43,28 @@ class FileUploadType extends AbstractType implements DataMapperInterface
         $uploadFilename = $options['upload_filename'];
         $uploadValidate = $options['upload_validate'];
         $allowAdd = $options['allow_add'];
-        unset($options['upload_dir'], $options['upload_new'], $options['upload_delete'], $options['upload_filename'], $options['upload_validate'], $options['download_path'], $options['allow_add'], $options['allow_delete'], $options['compound']);
+        unset(
+            $options['upload_dir'],
+            $options['upload_new'],
+            $options['upload_delete'],
+            $options['upload_filename'],
+            $options['upload_validate'],
+            $options['download_path'],
+            $options['allow_add'],
+            $options['allow_delete'],
+            $options['compound']
+        );
 
+        $constraintsOld = $options['constraints'];
+        $options['constraints'] = $this->getConstraintsFile($options);
+
+        unset(
+            $options['file_constraints'],
+            $options['image_constraints']
+        );
         $builder->add('file', FileType::class, $options);
+        $options['constraints'] = $constraintsOld;
+
         $builder->add('delete', CheckboxType::class, ['required' => false]);
 
         $builder->setDataMapper($this);
@@ -142,6 +163,8 @@ class FileUploadType extends AbstractType implements DataMapperInterface
             'required' => false,
             'error_bubbling' => false,
             'allow_file_upload' => true,
+            'file_constraints' => null,
+            'image_constraints' => null,
         ]);
 
         $resolver->setAllowedTypes('upload_dir', 'string');
@@ -152,6 +175,8 @@ class FileUploadType extends AbstractType implements DataMapperInterface
         $resolver->setAllowedTypes('download_path', ['null', 'string']);
         $resolver->setAllowedTypes('allow_add', 'bool');
         $resolver->setAllowedTypes('allow_delete', 'bool');
+        $resolver->setAllowedTypes('file_constraints', ['null', FileConstraint::class]);
+        $resolver->setAllowedTypes('image_constraints', ['null', ImageConstraint::class]);
 
         $resolver->setNormalizer('upload_dir', function (Options $options, string $value): string {
             if (\DIRECTORY_SEPARATOR !== mb_substr($value, -1)) {
@@ -243,5 +268,18 @@ class FileUploadType extends AbstractType implements DataMapperInterface
         } else {
             $currentFiles = $uploadedFiles;
         }
+    }
+
+    public function getConstraintsFile(array $options): array
+    {
+        if (isset($options['image_constraints']) && null !== $options['image_constraints']) {
+            return array_merge($options['constraints'], [$options['image_constraints']]);
+        }
+
+        if (isset($options['file_constraints']) && null !== $options['file_constraints']) {
+            return array_merge($options['constraints'], [$options['file_constraints']]);
+        }
+
+        return $options['constraints'];
     }
 }
